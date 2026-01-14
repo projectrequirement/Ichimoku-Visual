@@ -1,0 +1,195 @@
+<h2>Feature Requirements &amp; Implementation Status</h2>
+
+<h3>Original Requirements vs Implementation Status</h3>
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Requirement</th>
+      <th>Status</th>
+      <th>Implementation Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><b>Timeframe Handling</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>Works on any chart timeframe. Lookback period is user-editable (default: 29 candles).</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><b>Leading Span B Range Condition</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>(max(Span B) − min(Span B)) / average(Span B) ≤ 0.55% (default).</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><b>Leading Span A Proximity Condition</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>abs(Span A − Span B) / Span B ≤ 0.80% for <b>ALL candles</b> in lookback window.</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><b>Senkou (Leading) Spans Forward-Shift</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>Uses forward-shifted Ichimoku values with displacement (default: 26).</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><b>Strict Validation</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>All candles must satisfy both conditions. No partial signals.</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><b>Visual Output – Zone Start</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>✅ Emoji at Span A offset + vertical line on trigger candle.</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><b>Visual Output – Zone End</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>❌ Emoji at Span A offset + vertical line on end candle.</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><b>User-Editable Inputs</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>
+        Lookback candles (29)<br>
+        Span B threshold (0.55%)<br>
+        Span A proximity threshold (0.80%)
+      </td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><b>Trigger Frequency</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>Triggers only once on FALSE → TRUE transition.</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><b>Historical Trigger Display</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>All historical triggers remain visible. No repainting.</td>
+    </tr>
+    <tr>
+      <td>11</td>
+      <td><b>Free TradingView Compatibility</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>No paid TradingView features used.</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td><b>Rule-Based Formulas</b></td>
+      <td>✅ IMPLEMENTED</td>
+      <td>Exact formulas implemented. No discretionary logic.</td>
+    </tr>
+  </tbody>
+</table>
+
+<br>
+
+<h3>Extra Features Added (Beyond Original Requirements)</h3>
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Extra Feature</th>
+      <th>Description</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><b>Latest Marker Widget</b></td>
+      <td>Shows latest marker type, bar index, and bars ago.</td>
+      <td>Quick reference</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><b>Transparency Lines</b></td>
+      <td>
+        Yellow: Span B max ↔ min (offset)<br>
+        Cyan: Max |Span A − Span B| (offset)
+      </td>
+      <td>Visual verification</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><b>Percentage Display Option</b></td>
+      <td>Shows Span B range % and max gap %.</td>
+      <td>Detailed analysis</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><b>Ichimoku Display Toggles</b></td>
+      <td>Show/hide Conversion, Base, Lagging spans.</td>
+      <td>Chart customization</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><b>Marker Color Customization</b></td>
+      <td>User-defined colors for markers.</td>
+      <td>Personalization</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><b>Zone End Detection</b></td>
+      <td>Marks end of tradable zone.</td>
+      <td>Lifecycle tracking</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><b>Transparency Line Toggle</b></td>
+      <td>Option to hide/show verification lines.</td>
+      <td>Reduce clutter</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><b>Improved Bar Finding Logic</b></td>
+      <td>0.01% tolerance with closest-match fallback.</td>
+      <td>Floating-point accuracy</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><b>Actual Value Tracking</b></td>
+      <td>Uses real Span B values from bars.</td>
+      <td>Accurate plotting</td>
+    </tr>
+  </tbody>
+</table>
+
+<br>
+
+<h3>Compliance Summary</h3>
+
+<table border="1" cellpadding="8" cellspacing="0" width="60%">
+  <tbody>
+    <tr>
+      <td><b>Original Requirements</b></td>
+      <td>✅ 12 / 12 Implemented (100%)</td>
+    </tr>
+    <tr>
+      <td><b>Extra Features</b></td>
+      <td>✅ 9 Implemented</td>
+    </tr>
+    <tr>
+      <td><b>Code Quality</b></td>
+      <td>No repainting, historical accuracy</td>
+    </tr>
+    <tr>
+      <td><b>User Experience</b></td>
+      <td>Highly customizable, visually verifiable</td>
+    </tr>
+    <tr>
+      <td><b>Production Readiness</b></td>
+      <td>✅ Yes</td>
+    </tr>
+  </tbody>
+</table>
