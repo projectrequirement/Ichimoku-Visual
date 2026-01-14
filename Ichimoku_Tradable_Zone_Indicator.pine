@@ -1,0 +1,412 @@
+//@version=6
+indicator(title="Custom Ichimoku Tradable Zone", shorttitle="Ichimoku TZ", overlay=true)
+
+// ─────────────────────────────
+// Ichimoku Inputs (Original)
+// ─────────────────────────────
+conversionPeriods   = input.int(9,  minval=1, title="Conversion Line Length")
+basePeriods         = input.int(26, minval=1, title="Base Line Length")
+laggingSpan2Periods = input.int(52, minval=1, title="Leading Span B Length")
+displacement        = input.int(26, minval=1, title="Displacement")
+
+// ─────────────────────────────
+// Display Options
+// ─────────────────────────────
+showConversionLine = input.bool(false, title="Show Conversion Line", group="Display Options")
+showBaseLine       = input.bool(false, title="Show Base Line", group="Display Options")
+showLaggingSpan    = input.bool(false, title="Show Lagging Span", group="Display Options")
+
+// ─────────────────────────────
+// Custom Scan Inputs
+// ─────────────────────────────
+scanRange            = input.int(29, minval=1, title="Lookback Candles")
+maxSpanBDeviationPct = input.float(0.55, title="Span B Range Threshold (%)")
+maxSpanABGapPct      = input.float(0.80, title="Span A Proximity Threshold (%)")
+
+lineColor = input.color(color.red, title="Marker Color")
+showPercentages = input.bool(false, title="Show Percentage Values in Labels", group="Marker Options")
+showTransparencyLines = input.bool(true, title="Show Transparency Lines (Visual Verification)", group="Marker Options", tooltip="Yellow line: Span B range (max to min)\nCyan line: Span A-B gap at max location")
+
+// ─────────────────────────────
+// Ichimoku Calculations
+// ─────────────────────────────
+donchian(len) =>
+    math.avg(ta.lowest(len), ta.highest(len))
+
+conversionLine = donchian(conversionPeriods)
+baseLine       = donchian(basePeriods)
+leadLine1      = math.avg(conversionLine, baseLine)   // Span A
+leadLine2      = donchian(laggingSpan2Periods)         // Span B
+
+// ─────────────────────────────
+// Plot Original Ichimoku
+// ─────────────────────────────
+plot(conversionLine, color=#2962FF, title="Conversion Line", display=showConversionLine ? display.all : display.none)
+plot(baseLine, color=#B71C1C, title="Base Line", display=showBaseLine ? display.all : display.none)
+plot(close, offset = -displacement + 1, color=#43A047, title="Lagging Span", display=showLaggingSpan ? display.all : display.none)
+
+p1 = plot(leadLine1, offset = displacement - 1, color=#A5D6A7, title="Leading Span A")
+p2 = plot(leadLine2, offset = displacement - 1, color=#EF9A9A, title="Leading Span B")
+
+plot(leadLine1 > leadLine2 ? leadLine1 : leadLine2,
+     offset = displacement - 1,
+     display = display.none)
+
+plot(leadLine1 < leadLine2 ? leadLine1 : leadLine2,
+     offset = displacement - 1,
+     display = display.none)
+
+fill(
+    p1,
+    p2,
+    color = leadLine1 > leadLine2
+        ? color.rgb(67, 160, 71, 90)
+        : color.rgb(244, 67, 54, 90)
+)
+
+// ─────────────────────────────
+// CONDITION 1: Span B Range Condition
+// (max(Span B) - min(Span B)) / average(Span B) ≤ threshold
+// ─────────────────────────────
+spanB_high = ta.highest(leadLine2, scanRange)
+spanB_low  = ta.lowest(leadLine2, scanRange)
+spanB_avg  = ta.sma(leadLine2, scanRange)
+
+spanB_range_pct = (spanB_high - spanB_low) / spanB_avg * 100
+cond_spanB = spanB_range_pct <= maxSpanBDeviationPct
+
+// Find bar indices where max and min Span B occurred (for transparency line)
+// Use percentage-based tolerance for floating point comparison
+int spanB_high_bar = -1
+int spanB_low_bar = -1
+float spanB_high_actual = na
+float spanB_low_actual = na
+float tolerance_pct = 0.01  // 0.01% tolerance
+
+for i = 0 to scanRange - 1
+    // Find first occurrence of max Span B (with percentage tolerance)
+    if spanB_high_bar == -1
+        diff_pct = math.abs(leadLine2[i] - spanB_high) / spanB_high * 100
+        if diff_pct < tolerance_pct
+            spanB_high_bar := i
+            spanB_high_actual := leadLine2[i]  // Use actual value at this bar
+    // Find first occurrence of min Span B (with percentage tolerance)
+    if spanB_low_bar == -1
+        diff_pct = math.abs(leadLine2[i] - spanB_low) / spanB_low * 100
+        if diff_pct < tolerance_pct
+            spanB_low_bar := i
+            spanB_low_actual := leadLine2[i]  // Use actual value at this bar
+    // Break early if both found
+    if spanB_high_bar >= 0 and spanB_low_bar >= 0
+        break
+
+// Fallback: if not found, search for closest values
+if spanB_high_bar == -1
+    float min_diff = 999999.0
+    for i = 0 to scanRange - 1
+        diff = math.abs(leadLine2[i] - spanB_high)
+        if diff < min_diff
+            min_diff := diff
+            spanB_high_bar := i
+            spanB_high_actual := leadLine2[i]  // Use actual value at this bar
+
+if spanB_low_bar == -1
+    float min_diff = 999999.0
+    for i = 0 to scanRange - 1
+        diff = math.abs(leadLine2[i] - spanB_low)
+        if diff < min_diff
+            min_diff := diff
+            spanB_low_bar := i
+            spanB_low_actual := leadLine2[i]  // Use actual value at this bar
+
+// Final fallback: use the ta.highest/lowest values if actual values not found
+if na(spanB_high_actual)
+    spanB_high_actual := spanB_high
+if na(spanB_low_actual)
+    spanB_low_actual := spanB_low
+
+// Ensure bars are always found (final safety check)
+if spanB_high_bar == -1
+    spanB_high_bar := 0
+    spanB_high_actual := leadLine2[0]
+if spanB_low_bar == -1
+    spanB_low_bar := 0
+    spanB_low_actual := leadLine2[0]
+
+// ─────────────────────────────
+// CONDITION 2: Span A Proximity Condition
+// ALL candles must satisfy: abs(Span A - Span B) / Span B ≤ threshold
+// ─────────────────────────────
+// Check ALL candles in the lookback window
+allCandlesValid = true
+max_gap_pct = 0.0
+int max_gap_bar = 0
+float max_gap_spanA_value = na
+float max_gap_spanB_value = na
+
+// Initialize with first bar values to ensure we always have valid starting point
+if not na(leadLine1[0]) and not na(leadLine2[0])
+    max_gap_bar := 0
+    max_gap_spanA_value := leadLine1[0]
+    max_gap_spanB_value := leadLine2[0]
+
+for i = 0 to scanRange - 1
+    if not na(leadLine1[i]) and not na(leadLine2[i])
+        gap_pct = math.abs(leadLine1[i] - leadLine2[i]) / leadLine2[i] * 100
+        if gap_pct > max_gap_pct
+            max_gap_pct := gap_pct
+            max_gap_bar := i
+            max_gap_spanA_value := leadLine1[i]
+            max_gap_spanB_value := leadLine2[i]
+        if gap_pct > maxSpanABGapPct
+            allCandlesValid := false
+
+// Ensure max_gap values are always valid (fallback to first bar if needed)
+if na(max_gap_spanA_value) or na(max_gap_spanB_value)
+    max_gap_bar := 0
+    max_gap_spanA_value := leadLine1[0]
+    max_gap_spanB_value := leadLine2[0]
+// Final safety check: use current values if still NA
+if na(max_gap_spanA_value)
+    max_gap_spanA_value := leadLine1
+if na(max_gap_spanB_value)
+    max_gap_spanB_value := leadLine2
+
+cond_spanAB = allCandlesValid
+
+// ─────────────────────────────
+// Tradable Zone Logic
+// ─────────────────────────────
+tradableZone = cond_spanB and cond_spanAB
+
+// Trigger ONLY when conditions turn true
+trigger = tradableZone and not tradableZone[1]
+
+// Trigger when tradable zone ends (was true, now false)
+endTrigger = not tradableZone and tradableZone[1]
+
+// ─────────────────────────────
+// Track Latest Marker for Widget
+// ─────────────────────────────
+var int latestMarkerBar = na
+var string latestMarkerType = ""
+
+if trigger
+    latestMarkerBar := bar_index
+    latestMarkerType := "✅"
+    
+if endTrigger
+    latestMarkerBar := bar_index
+    latestMarkerType := "❌"
+
+// ─────────────────────────────
+// Latest Marker Widget Table
+// ─────────────────────────────
+var table latestMarkerTable = table.new(position.top_right, 2, 3, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.gray)
+
+if barstate.islast
+    barsAgo = not na(latestMarkerBar) ? bar_index - latestMarkerBar : na
+    markerText = latestMarkerType != "" ? latestMarkerType : "None"
+    barText = not na(latestMarkerBar) ? str.tostring(latestMarkerBar) : "N/A"
+    barsAgoText = not na(barsAgo) ? str.tostring(barsAgo) : "N/A"
+    
+    table.cell(latestMarkerTable, 0, 0, "Latest:", text_color = color.white, text_size = size.normal)
+    table.cell(latestMarkerTable, 1, 0, markerText, text_color = color.white, text_size = size.normal)
+    table.cell(latestMarkerTable, 0, 1, "Bar:", text_color = color.gray, text_size = size.small)
+    table.cell(latestMarkerTable, 1, 1, barText, text_color = color.gray, text_size = size.small)
+    table.cell(latestMarkerTable, 0, 2, "Bars Ago:", text_color = color.gray, text_size = size.small)
+    table.cell(latestMarkerTable, 1, 2, barsAgoText, text_color = color.gray, text_size = size.small)
+
+// ─────────────────────────────
+// Visual Marker: Line + ✅ Emoji (Zone Start)
+// ─────────────────────────────
+if trigger
+    // Vertical line on trigger candle (at current bar, not offset)
+    line.new(
+        x1 = bar_index,
+        y1 = low,
+        x2 = bar_index,
+        y2 = high,
+        color = lineColor,
+        width = 2,
+        style = line.style_solid
+    )
+    
+    // Transparency lines (showing condition measurements at offset positions)
+    // These lines serve as visual cross-verification tools
+    // NOTE: Calculation is based on candles, but plotting is done at offset positions
+    // Plotted at offset positions of candles where conditions transition from false to true
+    if showTransparencyLines
+        // Ensure bar indices are within valid range
+        spanB_high_bar_valid = math.max(0, math.min(spanB_high_bar, scanRange - 1))
+        spanB_low_bar_valid = math.max(0, math.min(spanB_low_bar, scanRange - 1))
+        max_gap_bar_valid = math.max(0, math.min(max_gap_bar, scanRange - 1))
+        
+        // Calculate offset positions where Span values are plotted
+        // Offset positions = (bar_index - bars_ago) + displacement - 1
+        // This matches where the Ichimoku cloud is displayed
+        x1_spanB_high = (bar_index - spanB_high_bar_valid) + displacement - 1  // Offset plot of max Span B
+        x2_spanB_low = (bar_index - spanB_low_bar_valid) + displacement - 1    // Offset plot of min Span B
+        x_max_gap = (bar_index - max_gap_bar_valid) + displacement - 1          // Offset plot of max gap candle
+        
+        // Get Span B values at the identified bars (these are the actual plotted values)
+        // Since zone detection is working, these values MUST exist and be valid
+        // Use the actual found values first, then fallback to ensure we always have valid values
+        y1_spanB_high = not na(spanB_high_actual) ? spanB_high_actual : (not na(leadLine2[spanB_high_bar_valid]) ? leadLine2[spanB_high_bar_valid] : spanB_high)
+        y2_spanB_low = not na(spanB_low_actual) ? spanB_low_actual : (not na(leadLine2[spanB_low_bar_valid]) ? leadLine2[spanB_low_bar_valid] : spanB_low)
+        
+        // Final safety: if still NA (should never happen if zone detection works), use current value
+        if na(y1_spanB_high)
+            y1_spanB_high := leadLine2
+        if na(y2_spanB_low)
+            y2_spanB_low := leadLine2
+        
+        // Line 1: Span B Extremes Connector
+        // Connects the offset plot of maximum Span B to the offset plot of minimum Span B
+        // This line visually represents the full effective range of Span B across the offset window
+        // CRITICAL: This line MUST be drawn if zone detection is working
+        // Always draw - ensures transparency lines are visible for all triggers
+        line.new(
+            x1 = x1_spanB_high,
+            y1 = y1_spanB_high,  // Span B value at max bar (plotted at offset position)
+            x2 = x2_spanB_low,
+            y2 = y2_spanB_low,    // Span B value at min bar (plotted at offset position)
+            color = color.new(color.yellow, 0),
+            width = 3,
+            style = line.style_solid,
+            extend = extend.none
+        )
+        
+        // Ensure max_gap values are valid (multiple fallback layers)
+        gap_spanA = na(max_gap_spanA_value) ? (na(leadLine1[max_gap_bar_valid]) ? leadLine1 : leadLine1[max_gap_bar_valid]) : max_gap_spanA_value
+        gap_spanB = na(max_gap_spanB_value) ? (na(leadLine2[max_gap_bar_valid]) ? leadLine2 : leadLine2[max_gap_bar_valid]) : max_gap_spanB_value
+        
+        // Final fallback: use current values if still NA
+        if na(gap_spanA)
+            gap_spanA := leadLine1
+        if na(gap_spanB)
+            gap_spanB := leadLine2
+        
+        // Line 2: Span A–Span B Deviation Connector
+        // Connects both offset plot points of the candle where abs(Span A - Span B) is maximum
+        // This line highlights the point of maximum divergence between Span A and Span B
+        // within the same offset context
+        // Always draw - ensures transparency lines are visible for all triggers
+        line.new(
+            x1 = x_max_gap,                    // Same offset position (max gap candle)
+            y1 = gap_spanA,                    // Span A offset plot point at max gap candle
+            x2 = x_max_gap,                    // Same offset position (max gap candle)
+            y2 = gap_spanB,                     // Span B offset plot point at max gap candle
+            color = color.new(#00FFFF, 0),     // Cyan color using RGB
+            width = 3,
+            style = line.style_solid,
+            extend = extend.none
+        )
+    
+    // ✅ marker - at current Span A offset plot point
+    labelText = showPercentages ? "✅\nSpanB: " + str.tostring(spanB_range_pct, "#.##") + "%\nGap: " + str.tostring(max_gap_pct, "#.##") + "%" : "✅"
+    label.new(
+        x = bar_index + displacement - 1,
+        y = leadLine1,
+        text = labelText,
+        textcolor = lineColor,
+        style = label.style_label_center,
+        size = size.huge
+    )
+
+// ─────────────────────────────
+// Visual Marker: Line + ❌ Emoji (Zone End)
+// ─────────────────────────────
+if endTrigger
+    // Vertical line on trigger candle (at current bar, not offset)
+    line.new(
+        x1 = bar_index,
+        y1 = low,
+        x2 = bar_index,
+        y2 = high,
+        color = lineColor,
+        width = 2,
+        style = line.style_solid
+    )
+    
+    // Transparency lines (showing condition measurements at offset positions)
+    // These lines serve as visual cross-verification tools
+    // NOTE: Calculation is based on candles, but plotting is done at offset positions
+    // Plotted at offset positions of candles where conditions transition from true to false
+    if showTransparencyLines
+        // Ensure bar indices are within valid range
+        spanB_high_bar_valid = math.max(0, math.min(spanB_high_bar, scanRange - 1))
+        spanB_low_bar_valid = math.max(0, math.min(spanB_low_bar, scanRange - 1))
+        max_gap_bar_valid = math.max(0, math.min(max_gap_bar, scanRange - 1))
+        
+        // Calculate offset positions where Span values are plotted
+        // Offset positions = (bar_index - bars_ago) + displacement - 1
+        // This matches where the Ichimoku cloud is displayed
+        x1_spanB_high = (bar_index - spanB_high_bar_valid) + displacement - 1  // Offset plot of max Span B
+        x2_spanB_low = (bar_index - spanB_low_bar_valid) + displacement - 1    // Offset plot of min Span B
+        x_max_gap = (bar_index - max_gap_bar_valid) + displacement - 1          // Offset plot of max gap candle
+        
+        // Get Span B values at the identified bars (these are the actual plotted values)
+        // Since zone detection is working, these values MUST exist and be valid
+        // Use the actual found values first, then fallback to ensure we always have valid values
+        y1_spanB_high = not na(spanB_high_actual) ? spanB_high_actual : (not na(leadLine2[spanB_high_bar_valid]) ? leadLine2[spanB_high_bar_valid] : spanB_high)
+        y2_spanB_low = not na(spanB_low_actual) ? spanB_low_actual : (not na(leadLine2[spanB_low_bar_valid]) ? leadLine2[spanB_low_bar_valid] : spanB_low)
+        
+        // Final safety: if still NA (should never happen if zone detection works), use current value
+        if na(y1_spanB_high)
+            y1_spanB_high := leadLine2
+        if na(y2_spanB_low)
+            y2_spanB_low := leadLine2
+        
+        // Line 1: Span B Extremes Connector
+        // Connects the offset plot of maximum Span B to the offset plot of minimum Span B
+        // This line visually represents the full effective range of Span B across the offset window
+        // CRITICAL: This line MUST be drawn if zone detection is working
+        // Always draw - ensures transparency lines are visible for all triggers
+        line.new(
+            x1 = x1_spanB_high,
+            y1 = y1_spanB_high,  // Span B value at max bar (plotted at offset position)
+            x2 = x2_spanB_low,
+            y2 = y2_spanB_low,    // Span B value at min bar (plotted at offset position)
+            color = color.new(color.yellow, 0),
+            width = 3,
+            style = line.style_solid,
+            extend = extend.none
+        )
+        
+        // Ensure max_gap values are valid (multiple fallback layers)
+        gap_spanA = na(max_gap_spanA_value) ? (na(leadLine1[max_gap_bar_valid]) ? leadLine1 : leadLine1[max_gap_bar_valid]) : max_gap_spanA_value
+        gap_spanB = na(max_gap_spanB_value) ? (na(leadLine2[max_gap_bar_valid]) ? leadLine2 : leadLine2[max_gap_bar_valid]) : max_gap_spanB_value
+        
+        // Final fallback: use current values if still NA
+        if na(gap_spanA)
+            gap_spanA := leadLine1
+        if na(gap_spanB)
+            gap_spanB := leadLine2
+        
+        // Line 2: Span A–Span B Deviation Connector
+        // Connects both offset plot points of the candle where abs(Span A - Span B) is maximum
+        // This line highlights the point of maximum divergence between Span A and Span B
+        // within the same offset context
+        // Always draw - ensures transparency lines are visible for all triggers
+        line.new(
+            x1 = x_max_gap,                    // Same offset position (max gap candle)
+            y1 = gap_spanA,                    // Span A offset plot point at max gap candle
+            x2 = x_max_gap,                    // Same offset position (max gap candle)
+            y2 = gap_spanB,                     // Span B offset plot point at max gap candle
+            color = color.new(#00FFFF, 0),     // Cyan color using RGB
+            width = 3,
+            style = line.style_solid,
+            extend = extend.none
+        )
+    
+    // ❌ marker - at current Span A offset plot point
+    labelText = showPercentages ? "❌\nSpanB: " + str.tostring(spanB_range_pct, "#.##") + "%\nGap: " + str.tostring(max_gap_pct, "#.##") + "%" : "❌"
+    label.new(
+        x = bar_index + displacement - 1,
+        y = leadLine1,
+        text = labelText,
+        textcolor = lineColor,
+        style = label.style_label_center,
+        size = size.huge
+    )
